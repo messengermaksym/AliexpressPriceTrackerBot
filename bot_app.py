@@ -15,6 +15,20 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Global list to store recent runtime errors for diagnostics
+LAST_ERRORS = []
+
+class WebhookExceptionHandler(telebot.ExceptionHandler):
+    def handle(self, exception):
+        import traceback
+        error_info = {
+            "error": str(exception),
+            "traceback": traceback.format_exc()
+        }
+        logger.error(f"Telebot internal exception: {error_info}")
+        LAST_ERRORS.append(error_info)
+        return True
+
 # Initialize dependencies
 db = DatabaseManager()
 parser = AliExpressParser()
@@ -26,7 +40,7 @@ if not TOKEN:
     logger.warning("TELEGRAM_BOT_TOKEN not found in environment variables. Bot will not function.")
     bot = None
 else:
-    bot = telebot.TeleBot(TOKEN, parse_mode="HTML")
+    bot = telebot.TeleBot(TOKEN, parse_mode="HTML", exception_handler=WebhookExceptionHandler())
 
 # Initialize FastAPI app
 app = FastAPI(title="AliExpress Price Tracker Bot")
@@ -339,7 +353,8 @@ def diagnostics():
         "supabase_url": url_status,
         "supabase_key": key_status,
         "database_status": db_status,
-        "database_error": db_error
+        "database_error": db_error,
+        "last_errors": LAST_ERRORS
     }
 
 if __name__ == "__main__":
