@@ -312,6 +312,36 @@ async def telegram_webhook(request: Request):
         logger.error(f"Error processing webhook update: {e}")
         return Response(status_code=400, content=str(e))
 
+@app.get("/api/diagnostics")
+def diagnostics():
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    sb_url = os.getenv("SUPABASE_URL")
+    sb_key = os.getenv("SUPABASE_KEY")
+    
+    token_status = f"Present (len={len(token)}, ends with {token[-4:]})" if token else "Missing"
+    url_status = "Present" if sb_url else "Missing"
+    key_status = f"Present (len={len(sb_key)}, starts with {sb_key[:10]}..., ends with ...{sb_key[-10:]})" if sb_key else "Missing"
+    
+    db_status = "Not initialized"
+    db_error = None
+    if db.is_ready():
+        try:
+            res = db.client.table("users").select("*").limit(1).execute()
+            db_status = f"Connected successfully (found {len(res.data)} users)"
+        except Exception as e:
+            db_status = "Error connecting"
+            db_error = str(e)
+    else:
+        db_status = "Client not ready (check URL/Key)"
+        
+    return {
+        "telegram_bot_token": token_status,
+        "supabase_url": url_status,
+        "supabase_key": key_status,
+        "database_status": db_status,
+        "database_error": db_error
+    }
+
 if __name__ == "__main__":
     # Local execution mode: run bot using Polling (no webhook required)
     if bot:
